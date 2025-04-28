@@ -2,98 +2,90 @@ from flask import Flask
 import threading
 import os
 import time
-import pickle
 import random
+import pickle
 from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__)
 
-def save_cookies(driver, filename):
-    with open(filename, "wb") as filehandler:
-        pickle.dump(driver.get_cookies(), filehandler)
+USERNAME = "aljrah48"
+PASSWORD = "123456789Mmm."
+STREAM_URL = "https://kick.com/atro"
 
-def load_cookies(driver, filename):
-    with open(filename, "rb") as cookiesfile:
-        cookies = pickle.load(cookiesfile)
+def save_cookies(driver, path="cookies.pkl"):
+    with open(path, "wb") as file:
+        pickle.dump(driver.get_cookies(), file)
+
+def load_cookies(driver, path="cookies.pkl"):
+    with open(path, "rb") as file:
+        cookies = pickle.load(file)
         for cookie in cookies:
             driver.add_cookie(cookie)
 
-def human_activity(driver):
+def login(driver):
+    driver.get("https://kick.com/login")
+    time.sleep(5)
+    
+    username_input = driver.find_element(By.NAME, "username")
+    password_input = driver.find_element(By.NAME, "password")
+    login_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Log In')]")
+    
+    username_input.send_keys(USERNAME)
+    password_input.send_keys(PASSWORD)
+    login_button.click()
+    
+    time.sleep(8)
+    save_cookies(driver)
+
+def random_human_behavior(driver):
+    """يحرك الماوس بشكل خفيف وعشوائي داخل الصفحة"""
     actions = ActionChains(driver)
-    while True:
+    for _ in range(random.randint(1, 3)):  # يحرك عدة مرات خفيفة
+        x_offset = random.randint(-100, 100)
+        y_offset = random.randint(-100, 100)
         try:
-            # تحريك الماوس إلى مكان عشوائي
-            width = driver.execute_script("return window.innerWidth;")
-            height = driver.execute_script("return window.innerHeight;")
-            x = random.randint(0, width)
-            y = random.randint(0, height)
-            actions.move_by_offset(x, y).perform()
-            print(f"تحريك الماوس إلى ({x}, {y})")
+            actions.move_by_offset(x_offset, y_offset).perform()
             actions.reset_actions()
-            
-            # عمل سكرول خفيف لأعلى أو أسفل
-            scroll_amount = random.randint(-300, 300)
-            driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
-            print(f"تم سحب الصفحة بمقدار {scroll_amount}px")
-            
-            # انتظار وقت عشوائي بين الحركات
-            time.sleep(random.randint(30, 90))
+            time.sleep(random.uniform(1, 3))
         except Exception as e:
-            print("خطأ أثناء محاكاة النشاط البشري:", e)
-            break
+            print("تحريك الماوس فشل:", e)
 
 def start_bot():
     print("جاري تشغيل البوت ومحاولة الدخول إلى البث...")
     options = Options()
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--headless")
-    options.add_argument("--window-size=1920,1080")
-
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    
     driver = None
     try:
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
+        driver.get("https://kick.com/")
+        time.sleep(5)
         
-        driver.get("https://kick.com/atro/chat")
-        
-        if not os.path.exists("cookies.pkl"):
-            print("لا توجد كوكيز، سيتم تسجيل الدخول...")
-            time.sleep(3)
-            login_button = driver.find_element(By.LINK_TEXT, "Sign In")
-            login_button.click()
-            time.sleep(2)
-
-            username_input = driver.find_element(By.NAME, "username")
-            password_input = driver.find_element(By.NAME, "password")
-
-            username_input.send_keys("aljrah48")
-            password_input.send_keys("123456789Mmm.")
-            password_input.send_keys(Keys.RETURN)
-
-            time.sleep(10)
-            save_cookies(driver, "cookies.pkl")
-            print("تم حفظ الكوكيز!")
-        else:
-            print("تحميل الكوكيز...")
-            driver.delete_all_cookies()
-            load_cookies(driver, "cookies.pkl")
+        if os.path.exists("cookies.pkl"):
+            load_cookies(driver)
             driver.refresh()
             time.sleep(5)
-            print("تم تسجيل الدخول باستخدام الكوكيز!")
-
-        print("البوت الآن داخل البث!")
-
-        # بدء محاكاة النشاط البشري في خيط ثاني
-        threading.Thread(target=human_activity, args=(driver,)).start()
-
-        time.sleep(7 * 60 * 60)  # مشاهدة لمدة 7 ساعات
+        else:
+            login(driver)
+        
+        driver.get(STREAM_URL)
+        print("تم الدخول إلى البث بنجاح!")
+        
+        start_time = time.time()
+        while time.time() - start_time < 7 * 60 * 60:  # يراقب 7 ساعات
+            random_human_behavior(driver)
+            time.sleep(random.randint(30, 60))  # كل نصف دقيقة إلى دقيقة يحرك الماوس
+        
+        print("انتهى الوقت المحدد. جاري إغلاق البوت...")
 
     except Exception as e:
         print("حدث خطأ أثناء تشغيل البوت:", e)
@@ -103,7 +95,7 @@ def start_bot():
 
 @app.route('/')
 def home():
-    return "البوت شغال حالياً!"
+    return "البوت شغال وداخل بث Atro!"
 
 if __name__ == "__main__":
     threading.Thread(target=start_bot).start()
