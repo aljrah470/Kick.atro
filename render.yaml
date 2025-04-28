@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: kick-atro-bot
+    env: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: PORT
+        value: 10000
